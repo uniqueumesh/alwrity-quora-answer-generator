@@ -1,15 +1,14 @@
 import streamlit as st
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup # Keep BeautifulSoup for potential future use or if any basic parsing is needed on snippets
 import google.generativeai as genai
 import os
+# from playwright.sync_api import sync_playwright # Removed Playwright import
+# import asyncio # Removed asyncio import
 
-# Optional: OpenAI integration
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
-    st.warning("OpenAI library not found. To use OpenAI models, please install it: `pip install openai`")
+# Removed Playwright/asyncio fix
+# if os.name == 'nt': # Check if the operating system is Windows
+#     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 st.set_page_config(layout="wide")
 st.title("AI Quora Answer Generator")
@@ -46,40 +45,14 @@ def search_quora_with_serper(query, serper_api_key):
     response.raise_for_status()
     search_results = response.json()
     
-    quora_urls = []
+    quora_snippets = []
     if "organic" in search_results:
         for result in search_results["organic"]:
-            if "link" in result and "quora.com" in result["link"]:
-                quora_urls.append(result["link"])
-    return quora_urls
+            if "snippet" in result and "quora.com" in result["link"]:
+                quora_snippets.append(f"Source: {result["link"]}\nSnippet: {result["snippet"]}\n---")
+    return quora_snippets
 
-def scrape_quora_answer(url):
-    try:
-        response = requests.get(url, timeout=10) # Reverted to direct requests.get
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Attempt to find the main answer content. This might need refinement
-        # based on Quora's ever-changing HTML structure.
-        # Quora often uses JavaScript to load content, and direct requests.get might not get the full content.
-        # If content extraction consistently fails, consider using a headless browser (e.g., Playwright, Selenium)
-        # or a dedicated web scraping API (e.g., WebScrapingAPI) for robust content fetching.
-        answer_div = soup.find('div', class_=lambda x: x and ('AnswerBase'.lower() in x.lower() or 'AnswerItem'.lower() in x.lower()))
-        if answer_div:
-            return answer_div.get_text(separator="\n").strip()
-        else:
-            # Fallback for other potential answer structures or if answer_div is not found.
-            # This might return less relevant text or empty string if content is heavily JS-rendered.
-            paragraphs = soup.find_all('p')
-            if paragraphs:
-                return "\n".join([p.get_text(separator="\n").strip() for p in paragraphs if p.get_text(separator="\n").strip()])
-        return ""
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error fetching {url}: {e}") # Reverted error message
-        return ""
-    except Exception as e:
-        st.error(f"Error parsing {url}: {e}") # Reverted error message
-        return ""
+# Removed scrape_quora_answer function as we are now using snippets from Serper
 
 if st.button("Generate Answer"):
     if not google_api_key:
@@ -91,33 +64,23 @@ if st.button("Generate Answer"):
     else:
         st.success("Processing your request...")
         
-        with st.spinner("Searching Quora for relevant answers..."):
-            quora_links = search_quora_with_serper(question, serper_api_key)
+        with st.spinner("Searching Quora for relevant snippets..."):
+            # Now we collect snippets instead of trying to scrape full pages
+            collected_snippets = search_quora_with_serper(question, serper_api_key)
         
-        if not quora_links:
-            st.warning("Could not find any relevant Quora answers. Please try a different question or keywords.")
+        if not collected_snippets:
+            st.warning("Could not find any relevant Quora snippets. Please try a different question or keywords.")
         else:
-            st.info(f"Found {len(quora_links)} Quora links. Attempting to scrape answers...")
-            collected_answers = []
-            for i, link in enumerate(quora_links[:10]): # Limit to first 10 for now
-                st.text(f"Scraping {i+1}/{min(len(quora_links), 10)}: {link}")
-                answer_text = scrape_quora_answer(link)
-                if answer_text:
-                    collected_answers.append(f"Answer from {link}:\n{answer_text}\n---")
-                else:
-                    st.warning(f"Could not extract content from: {link}. The page might be heavily JavaScript-rendered or blocking direct access.")
+            st.info(f"Found {len(collected_snippets)} Quora snippets. Generating answer...")
             
-            if not collected_answers:
-                st.warning("Could not extract any usable answers from the found Quora links. This might be due to anti-scraping measures on Quora's side.")
-            else:
-                with st.spinner("Generating new answer with LLM..."):
-                    try:
-                        prompt = f"Given the following Quora answers to the question '{question}', synthesize a comprehensive and well-structured answer. Ensure the answer is natural, engaging, and incorporates insights from multiple sources. Aim for a professional but accessible tone.\n\nCollected Answers:\n" + "\n".join(collected_answers) + "\n\nGenerated Quora Answer:"
-                        
-                        genai.configure(api_key=google_api_key)
-                        model = genai.GenerativeModel(gemini_model)
-                        response = model.generate_content(prompt)
-                        st.subheader(f"Generated Quora Answer ({gemini_model}):")
-                        st.write(response.text)
-                    except Exception as e:
-                        st.error(f"Error generating content with LLM: {e}")
+            with st.spinner("Generating new answer with LLM..."):
+                try:
+                    prompt = f"Given the following search result snippets from Quora discussions related to the question '{question}', synthesize a comprehensive and well-structured answer. Focus on integrating insights from these snippets. Aim for a professional but accessible tone.\n\nCollected Snippets:\n" + "\n".join(collected_snippets) + "\n\nGenerated Quora Answer:"
+                    
+                    genai.configure(api_key=google_api_key)
+                    model = genai.GenerativeModel(gemini_model)
+                    response = model.generate_content(prompt)
+                    st.subheader(f"Generated Quora Answer ({gemini_model}):")
+                    st.write(response.text)
+                except Exception as e:
+                    st.error(f"Error generating content with LLM: {e}")
