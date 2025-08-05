@@ -49,17 +49,7 @@ Install the required Python packages using `pip`:
 pip install -r requirements.txt
 ```
 
-### 4. Install Playwright Browsers (Crucial for Scraping)
-
-Even though we're primarily using snippets, Playwright might still be used for certain parts or if future enhancements require browser automation. **This is a crucial step to ensure the underlying Playwright library can function if needed.**
-
-In your terminal, run:
-
-```bash
-playwright install
-```
-
-### 5. Obtain API Keys
+### 4. Obtain API Keys
 
 You will need two API keys:
 
@@ -72,7 +62,7 @@ You will need two API keys:
     *   Sign up for a free account.
     *   Your API key will be available in your dashboard.
 
-### 6. Run the Streamlit Application
+### 5. Run the Streamlit Application
 
 Once you have your API keys and all dependencies are installed, run the Streamlit application:
 
@@ -82,7 +72,7 @@ streamlit run quora_answer_generator.py
 
 This command will open the application in your default web browser (usually at `http://localhost:8501`).
 
-### 7. Use the Tool
+### 6. Use the Tool
 
 In the Streamlit application:
 
